@@ -1,103 +1,72 @@
 import pandas as pd
 import re
-
-# Function to preprocess Amharic text (cleaning and tokenizing)
-def preprocess_amharic_text(text):
-    text = re.sub(r'\s+', ' ', text)  # Remove extra spaces
-    text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
-    text = text.lower()  # Convert text to lowercase (optional)
-    return text
-
-# Read data from the raw file (messages.json)
-def load_raw_data():
-    data = []
-    with open('data/raw/messages.json', 'r', encoding='utf-8') as f:
-        for line in f:
-            data.append(json.loads(line))
-    return data
-
-# Function to preprocess messages
-def preprocess_data():
-    raw_data = load_raw_data()
-    processed_data = []
-
-    for message in raw_data:
-        sender = message.get('sender_id')
-        timestamp = message.get('timestamp')
-        text = message.get('text')
-
-        # Preprocess the text
-        processed_text = preprocess_amharic_text(text)
-
-        processed_data.append({
-            'sender_id': sender,
-            'timestamp': timestamp,
-            'text': processed_text
-        })
-
-    # Save preprocessed data to CSV
-    df = pd.DataFrame(processed_data)
-    df.to_csv('data/processed/processed_messages.csv', index=False)
-    print("Preprocessing completed and saved to CSV.")
-
-# Run the preprocessing
-if __name__ == "__main__":
-    preprocess_data()
-import pandas as pd
-import re
 import os
 
-# Function to preprocess Amharic text
-def preprocess_amharic_text(text):
-    """
-    Preprocesses Amharic text by performing the following:
-    - Removing extra spaces
-    - Removing non-alphanumeric characters (except spaces)
-    - Lowercasing the text
-    """
-    if isinstance(text, str):
-        # Remove extra spaces
-        text = re.sub(r'\s+', ' ', text).strip()
-        # Remove non-alphanumeric characters (keeping only letters and spaces)
-        text = re.sub(r'[^\w\s፣፤፥፨፩፪፫፬፭፮፯፰፱፲፳፴፵፶፷፸፹፺፻]', '', text)
-        # Convert to lowercase
-        text = text.lower()
-    return text
+# Load the raw data (from telegram_data.csv)
+def load_raw_data():
+    """Load the raw CSV data."""
+    data = pd.read_csv('data/raw/telegram_data.csv', encoding='utf-8')
+    return data
 
-# Function to load and process raw data
-def process_raw_data(input_file, output_file):
+# Function to remove emojis from the text
+def remove_emojis(text):
     """
-    Loads the raw data from the input CSV file, preprocesses the text data,
-    and saves it to the output CSV file.
+    Remove emojis from the text using a regular expression.
     """
-    # Load the raw data (CSV) into a DataFrame
-    df = pd.read_csv(input_file, encoding='utf-8')
+    emoji_pattern = re.compile(
+        "[" 
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F700-\U0001F77F"  # alchemical symbols
+        "\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
+        "\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
+        "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+        "\U0001FA00-\U0001FA6F"  # Chess Symbols
+        "\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+        "\U00002702-\U000027B0"  # Dingbats
+        "\U000024C2-\U0001F251" 
+        "]+", 
+        flags=re.UNICODE
+    )
+    return emoji_pattern.sub(r'', text)
 
-    # Ensure that the necessary columns exist
-    if 'Message' not in df.columns:
-        print("Error: 'Message' column not found in the raw data.")
-        return
-    
-    # Preprocess the 'Message' column
-    df['Processed_Message'] = df['Message'].apply(preprocess_amharic_text)
+# Function to preprocess and clean the data
+def preprocess_data():
+    """Clean the data by removing NaN values, emojis, and normalize text."""
+    # Load raw data
+    df = load_raw_data()
 
-    # Save the processed data to a new CSV file
-    df.to_csv(output_file, index=False, encoding='utf-8')
-    print(f"Processed data saved to {output_file}")
+    # Check for NaN values in the 'Message' column and drop them
+    print("Checking for NaN values in the 'Message' column:")
+    nan_count = df['Message'].isnull().sum()
+    print(f"Number of NaN values in 'Message' column: {nan_count}")
 
-# Main function to execute the processing
+    # Drop rows with NaN values in the 'Message' column
+    df = df.dropna(subset=['Message'])
+
+    # Show the dataset shape after dropping NaN values
+    print(f"Dataset shape after dropping NaN values in 'Message' column: {df.shape}")
+
+    # Clean the 'Message' column by removing emojis and normalizing the text
+    df['Message'] = df['Message'].apply(remove_emojis)  # Remove emojis
+
+    # Normalize the text (convert to lowercase)
+    df['Message'] = df['Message'].str.lower()
+
+    # Optionally, you can add further cleaning (e.g., removing unwanted punctuation, extra spaces)
+    df['Message'] = df['Message'].str.replace(r'\s+', ' ', regex=True).str.strip()
+
+    # Save the cleaned data to a new CSV file
+    cleaned_data_path = 'data/processed/clean_data.csv'
+    df.to_csv(cleaned_data_path, index=False, encoding='utf-8')
+    print(f"Cleaned data saved to {cleaned_data_path}")
+
+    # Return the cleaned DataFrame
+    return df
+
+# Main function to run the preprocessing
 if __name__ == "__main__":
-    input_file = 'data/raw/telegram_data.csv'  # Path to the raw CSV file
-    output_file = 'data/processed/processed_data.csv'  # Path to save the processed CSV file
-
-    # Check if the raw data file exists
-    if not os.path.exists(input_file):
-        print(f"Error: {input_file} does not exist.")
-    else:
-        # Process the raw data
-        process_raw_data(input_file, output_file)
-
-
-
-
-
+    cleaned_df = preprocess_data()
+    print("Sample of cleaned data:")
+    print(cleaned_df.head())
